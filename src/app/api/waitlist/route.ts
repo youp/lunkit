@@ -44,7 +44,6 @@ export async function POST(req: Request) {
   }
 
   // 2. 감사 이메일 발송
-  let emailError: string | null = null;
   try {
     await transporter.sendMail({
       from: `"Lunkit" <${process.env.GMAIL_USER}>`,
@@ -53,12 +52,10 @@ export async function POST(req: Request) {
       html: welcomeEmailHtml(),
     });
   } catch (err) {
-    emailError =
-      err instanceof Error ? err.message : "알 수 없는 이메일 오류";
     console.error("이메일 발송 실패:", err);
   }
 
-  return NextResponse.json({ success: true, emailError });
+  return NextResponse.json({ success: true });
 }
 
 function welcomeEmailHtml() {

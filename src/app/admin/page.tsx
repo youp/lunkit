@@ -106,10 +106,30 @@ export default function AdminPage() {
     .slice(0, 10);
 
   const handleApprove = async (id: string) => {
-    if (!confirm("이 프로젝트를 승인하시겠습니까?")) return;
+    const project = pendingProjects.find((p) => p.id === id);
+    if (!project) return;
+
+    const sendEmail = confirm(
+      "이 프로젝트를 승인하시겠습니까?\n\n[확인] 승인 + 대기자 이메일 발송\n[취소] 취소"
+    );
+    if (!sendEmail) return;
+
     try {
       await approveProject(id);
       setPendingProjects((prev) => prev.filter((p) => p.id !== id));
+
+      // 대기자에게 알림 이메일 발송
+      const res = await fetch("/api/admin/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectTitle: project.title, projectId: id }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert(`승인 완료! 이메일 ${result.sentCount}/${result.total}명 발송 성공`);
+      } else {
+        alert(`승인 완료! (이메일 발송 실패: ${result.error})`);
+      }
     } catch {
       alert("승인 실패");
     }

@@ -33,20 +33,12 @@ export function EmailForm({ className = "" }: EmailFormProps) {
       return;
     }
 
-    const data = await res.json();
-    if (data.emailError) {
-      setMessage({
-        text: `등록 완료! (이메일 발송 실패: ${data.emailError})`,
-        type: "error",
-      });
-    } else {
-      setMessage({ text: "등록 완료! 확인 메일을 보내드렸어요 📬", type: "success" });
-    }
+    setMessage({ text: "등록 완료! 확인 메일을 보내드렸어요 📬", type: "success" });
     setEmail("");
     setAgreed(false);
     setSubmitting(false);
 
-    setTimeout(() => setMessage(null), 8000);
+    setTimeout(() => setMessage(null), 4000);
   };
 
   return (
