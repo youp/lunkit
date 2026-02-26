@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 interface EmailFormProps {
   className?: string;
@@ -19,21 +18,19 @@ export function EmailForm({ className = "" }: EmailFormProps) {
     e.preventDefault();
     if (!email.trim() || !agreed) return;
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("waitlist")
-      .insert({ email, agreed_at: new Date().toISOString() });
+    const res = await fetch("/api/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, agreed_at: new Date().toISOString() }),
+    });
 
-    if (error) {
-      if (error.code === "23505") {
-        setMessage({ text: "이미 등록된 이메일입니다.", type: "error" });
-      } else {
-        setMessage({ text: "등록에 실패했습니다. 다시 시도해주세요.", type: "error" });
-      }
+    if (!res.ok) {
+      const { error } = await res.json();
+      setMessage({ text: error || "등록에 실패했습니다.", type: "error" });
       return;
     }
 
-    setMessage({ text: "등록 완료! 런칭 소식을 가장 먼저 알려드릴게요.", type: "success" });
+    setMessage({ text: "등록 완료! 확인 메일을 보내드렸어요 📬", type: "success" });
     setEmail("");
     setAgreed(false);
 
