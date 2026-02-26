@@ -1,8 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { EmailForm } from "./email-form";
 
 export function HeroSection() {
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    createClient()
+      .rpc("get_waitlist_count")
+      .then(({ data }) => setWaitlistCount(data ?? 0));
+  }, []);
+
   return (
     <section
       className="relative flex min-h-screen flex-col items-center justify-center px-6 pt-[120px] pb-20 text-center max-md:px-5 max-md:pt-[100px] max-md:pb-[60px]"
@@ -43,12 +53,14 @@ export function HeroSection() {
         <EmailForm />
       </div>
 
-      <p
-        className="mt-3 text-[13px] text-text-muted opacity-0"
-        style={{ animation: "fadeUp 0.8s var(--ease-out-expo) 0.8s forwards" }}
-      >
-        🔥 현재 <strong>42</strong>명이 기다리고 있어요
-      </p>
+      {waitlistCount !== null && waitlistCount > 0 && (
+        <p
+          className="mt-3 text-[13px] text-text-muted opacity-0"
+          style={{ animation: "fadeUp 0.8s var(--ease-out-expo) 0.8s forwards" }}
+        >
+          🔥 현재 <strong>{waitlistCount}</strong>명이 기다리고 있어요
+        </p>
+      )}
     </section>
   );
 }
