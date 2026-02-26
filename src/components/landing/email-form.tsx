@@ -9,6 +9,7 @@ interface EmailFormProps {
 export function EmailForm({ className = "" }: EmailFormProps) {
   const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{
     text: string;
     type: "success" | "error";
@@ -16,8 +17,9 @@ export function EmailForm({ className = "" }: EmailFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !agreed) return;
+    if (!email.trim() || !agreed || submitting) return;
 
+    setSubmitting(true);
     const res = await fetch("/api/waitlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -27,12 +29,14 @@ export function EmailForm({ className = "" }: EmailFormProps) {
     if (!res.ok) {
       const { error } = await res.json();
       setMessage({ text: error || "등록에 실패했습니다.", type: "error" });
+      setSubmitting(false);
       return;
     }
 
     setMessage({ text: "등록 완료! 확인 메일을 보내드렸어요 📬", type: "success" });
     setEmail("");
     setAgreed(false);
+    setSubmitting(false);
 
     setTimeout(() => setMessage(null), 4000);
   };
@@ -52,10 +56,10 @@ export function EmailForm({ className = "" }: EmailFormProps) {
           />
           <button
             type="submit"
-            disabled={!agreed}
+            disabled={!agreed || submitting}
             className="cursor-pointer whitespace-nowrap rounded-[14px] border-none bg-accent px-7 py-4 font-body text-base font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_6px_24px_var(--accent-glow)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none max-md:w-full"
           >
-            알림 받기
+            {submitting ? "등록 중..." : "알림 받기"}
           </button>
         </div>
         <label className="flex cursor-pointer items-start gap-2 text-left text-xs text-text-muted">
