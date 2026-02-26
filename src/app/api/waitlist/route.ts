@@ -44,6 +44,7 @@ export async function POST(req: Request) {
   }
 
   // 2. 감사 이메일 발송
+  let emailError: string | null = null;
   try {
     await transporter.sendMail({
       from: `"Lunkit" <${process.env.GMAIL_USER}>`,
@@ -52,11 +53,12 @@ export async function POST(req: Request) {
       html: welcomeEmailHtml(),
     });
   } catch (err) {
-    // 이메일 발송 실패해도 등록은 성공으로 처리
+    emailError =
+      err instanceof Error ? err.message : "알 수 없는 이메일 오류";
     console.error("이메일 발송 실패:", err);
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, emailError });
 }
 
 function welcomeEmailHtml() {
