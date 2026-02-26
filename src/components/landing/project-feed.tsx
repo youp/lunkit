@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ScrollAnimate } from "./scroll-animate";
-import { DUMMY_PROJECTS } from "@/lib/dummy-data";
+import { fetchProjects } from "@/lib/supabase/queries";
 import { STAGE_MAP, FEEDBACK_POINT_MAP } from "@/types/database";
+import type { Project } from "@/types/database";
 
 function ExternalLinkIcon() {
   return (
@@ -25,6 +27,16 @@ function ExternalLinkIcon() {
 }
 
 export function ProjectFeed() {
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    fetchProjects()
+      .then(setProjects)
+      .catch((err) => console.error("fetchProjects error:", err?.message ?? err));
+  }, []);
+
+  if (projects.length === 0) return null;
+
   return (
     <section className="mx-auto max-w-[820px] px-6 pt-20 pb-[100px]">
       <ScrollAnimate>
@@ -44,7 +56,7 @@ export function ProjectFeed() {
       </ScrollAnimate>
 
       <div className="flex flex-col gap-4">
-        {DUMMY_PROJECTS.map((project, i) => {
+        {projects.map((project, i) => {
           const stage = STAGE_MAP[project.stage];
           return (
             <ScrollAnimate key={project.id} delay={0.08 * i}>

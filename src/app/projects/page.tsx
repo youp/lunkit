@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Header } from "@/components/header";
-import { DUMMY_PROJECTS, TECH_STACKS } from "@/lib/dummy-data";
+import { fetchProjects, fetchTechStacks } from "@/lib/supabase/queries";
 import { STAGE_MAP, FEEDBACK_POINT_MAP } from "@/types/database";
-import type { ProjectStage } from "@/types/database";
+import type { ProjectStage, Project, TechStack } from "@/types/database";
 
 const STAGES: { value: ProjectStage | "all"; label: string }[] = [
   { value: "all", label: "전체" },
@@ -16,12 +16,25 @@ const STAGES: { value: ProjectStage | "all"; label: string }[] = [
 ];
 
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [allTechStacks, setAllTechStacks] = useState<TechStack[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStage, setSelectedStage] = useState<ProjectStage | "all">("all");
   const [selectedTechs, setSelectedTechs] = useState<string[]>([]);
 
+  useEffect(() => {
+    Promise.all([fetchProjects(), fetchTechStacks()])
+      .then(([p, t]) => {
+        setProjects(p);
+        setAllTechStacks(t);
+      })
+      .catch((err) => console.error("fetchProjects error:", err?.message ?? err))
+      .finally(() => setLoading(false));
+  }, []);
+
   const filteredProjects = useMemo(() => {
-    return DUMMY_PROJECTS.filter((p) => {
+    return projects.filter((p) => {
       if (search) {
         const q = search.toLowerCase();
         const matchesSearch =
@@ -37,7 +50,7 @@ export default function ProjectsPage() {
       }
       return true;
     });
-  }, [search, selectedStage, selectedTechs]);
+  }, [projects, search, selectedStage, selectedTechs]);
 
   const toggleTech = (slug: string) => {
     setSelectedTechs((prev) =>
@@ -47,9 +60,9 @@ export default function ProjectsPage() {
 
   // Only show tech stacks that appear in projects
   const usedTechSlugs = new Set(
-    DUMMY_PROJECTS.flatMap((p) => p.tech_stacks?.map((t) => t.slug) ?? [])
+    projects.flatMap((p) => p.tech_stacks?.map((t) => t.slug) ?? [])
   );
-  const availableTechs = TECH_STACKS.filter((t) => usedTechSlugs.has(t.slug));
+  const availableTechs = allTechStacks.filter((t) => usedTechSlugs.has(t.slug));
 
   return (
     <>
@@ -123,97 +136,103 @@ export default function ProjectsPage() {
         </p>
 
         {/* Project list */}
-        <div className="flex flex-col gap-4">
-          {filteredProjects.map((project) => {
-            const stage = STAGE_MAP[project.stage];
-            return (
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="group flex flex-col gap-4 rounded-[20px] border border-border bg-bg-card p-7 no-underline transition-all duration-300 hover:-translate-y-0.5 hover:border-border-hover hover:bg-bg-card-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] max-md:p-5"
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5">
-                      <h2 className="font-display text-xl font-bold tracking-tight text-text-primary transition-colors group-hover:text-accent">
-                        {project.title}
-                      </h2>
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-[5px] rounded-md px-2.5 py-[3px] text-[11px] font-semibold tracking-[0.3px] ${stage.className}`}
-                      >
-                        {stage.emoji} {stage.label}
-                      </span>
+        {loading ? (
+          <div className="py-20 text-center text-text-muted">
+            <p className="text-lg">불러오는 중...</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {filteredProjects.map((project) => {
+              const stage = STAGE_MAP[project.stage];
+              return (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="group flex flex-col gap-4 rounded-[20px] border border-border bg-bg-card p-7 no-underline transition-all duration-300 hover:-translate-y-0.5 hover:border-border-hover hover:bg-bg-card-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.06)] max-md:p-5"
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5">
+                        <h2 className="font-display text-xl font-bold tracking-tight text-text-primary transition-colors group-hover:text-accent">
+                          {project.title}
+                        </h2>
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-[5px] rounded-md px-2.5 py-[3px] text-[11px] font-semibold tracking-[0.3px] ${stage.className}`}
+                        >
+                          {stage.emoji} {stage.label}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-[15px] font-light leading-relaxed text-text-secondary">
+                        {project.tagline}
+                      </p>
                     </div>
-                    <p className="mt-1.5 text-[15px] font-light leading-relaxed text-text-secondary">
-                      {project.tagline}
-                    </p>
+                    <div className="flex shrink-0 gap-2">
+                      {project.demo_url && (
+                        <span className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
+                          <ExternalLinkIcon />
+                          웹
+                        </span>
+                      )}
+                      {project.app_store_url && (
+                        <span className="inline-flex items-center rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
+                          iOS
+                        </span>
+                      )}
+                      {project.play_store_url && (
+                        <span className="inline-flex items-center rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
+                          Android
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    {project.demo_url && (
-                      <span className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
-                        <ExternalLinkIcon />
-                        웹
-                      </span>
-                    )}
-                    {project.app_store_url && (
-                      <span className="inline-flex items-center rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
-                        iOS
-                      </span>
-                    )}
-                    {project.play_store_url && (
-                      <span className="inline-flex items-center rounded-[10px] border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all group-hover:border-accent group-hover:text-accent">
-                        Android
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                {/* Tech tags */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {project.tech_stacks?.map((tech) => (
-                    <span
-                      key={tech.slug}
-                      className="rounded-lg bg-tag-bg px-3 py-[5px] text-xs font-medium text-tag-text"
-                    >
-                      {tech.name}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between gap-3 border-t border-border pt-3 max-md:flex-col max-md:items-start">
-                  <div className="flex flex-wrap gap-1.5">
-                    {project.feedback_points.map((point) => (
+                  {/* Tech tags */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {project.tech_stacks?.map((tech) => (
                       <span
-                        key={point}
-                        className="rounded-md border border-dashed border-border bg-accent-subtle px-2.5 py-1 text-xs font-medium text-text-secondary"
+                        key={tech.slug}
+                        className="rounded-lg bg-tag-bg px-3 py-[5px] text-xs font-medium text-tag-text"
                       >
-                        💬 {FEEDBACK_POINT_MAP[point] ?? point}
+                        {tech.name}
                       </span>
                     ))}
                   </div>
-                  <div className="flex shrink-0 items-center gap-4 text-[13px] text-text-muted">
-                    <span className="flex items-center gap-1">👍 {project.upvote_count}</span>
-                    <span className="flex items-center gap-1">💬 {project.comment_count}</span>
-                    {project.profiles && (
-                      <span className="text-text-muted">
-                        by {project.profiles.display_name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
 
-          {filteredProjects.length === 0 && (
-            <div className="py-20 text-center text-text-muted">
-              <p className="text-lg">검색 결과가 없습니다</p>
-              <p className="mt-2 text-sm">다른 검색어나 필터를 시도해보세요</p>
-            </div>
-          )}
-        </div>
+                  {/* Footer */}
+                  <div className="flex items-center justify-between gap-3 border-t border-border pt-3 max-md:flex-col max-md:items-start">
+                    <div className="flex flex-wrap gap-1.5">
+                      {project.feedback_points.map((point) => (
+                        <span
+                          key={point}
+                          className="rounded-md border border-dashed border-border bg-accent-subtle px-2.5 py-1 text-xs font-medium text-text-secondary"
+                        >
+                          💬 {FEEDBACK_POINT_MAP[point] ?? point}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-4 text-[13px] text-text-muted">
+                      <span className="flex items-center gap-1">👍 {project.upvote_count}</span>
+                      <span className="flex items-center gap-1">💬 {project.comment_count}</span>
+                      {project.profiles && (
+                        <span className="text-text-muted">
+                          by {project.profiles.display_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+
+            {filteredProjects.length === 0 && !loading && (
+              <div className="py-20 text-center text-text-muted">
+                <p className="text-lg">검색 결과가 없습니다</p>
+                <p className="mt-2 text-sm">다른 검색어나 필터를 시도해보세요</p>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </>
   );

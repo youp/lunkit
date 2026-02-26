@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:push": "npx supabase db push",
+    "db:deploy": "bash scripts/deploy-db.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:preview": "npx vercel"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

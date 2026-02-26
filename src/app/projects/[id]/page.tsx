@@ -1,10 +1,17 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Header } from "@/components/header";
-import { DUMMY_PROJECTS, DUMMY_COMMENTS } from "@/lib/dummy-data";
+import {
+  fetchProject,
+  fetchComments,
+  createComment,
+  toggleUpvote,
+  checkUpvoted,
+} from "@/lib/supabase/queries";
 import { STAGE_MAP, FEEDBACK_POINT_MAP } from "@/types/database";
+import type { Project, Comment } from "@/types/database";
 
 export default function ProjectDetailPage({
   params,
@@ -12,7 +19,50 @@ export default function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const project = DUMMY_PROJECTS.find((p) => p.id === id);
+  const [project, setProject] = useState<Project | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [upvoted, setUpvoted] = useState(false);
+  const [upvoteCount, setUpvoteCount] = useState(0);
+
+  useEffect(() => {
+    Promise.all([fetchProject(id), fetchComments(id), checkUpvoted(id)])
+      .then(([p, c, u]) => {
+        setProject(p);
+        setComments(c);
+        setUpvoted(u);
+        setUpvoteCount(p?.upvote_count ?? 0);
+      })
+      .catch((err) => console.error("fetchProject error:", err?.message ?? err))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleUpvote = async () => {
+    try {
+      const added = await toggleUpvote(id);
+      setUpvoted(added);
+      setUpvoteCount((prev) => (added ? prev + 1 : prev - 1));
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("로그인")) {
+        alert("로그인이 필요합니다");
+      }
+    }
+  };
+
+  const handleCommentAdded = (comment: Comment) => {
+    setComments((prev) => [...prev, comment]);
+  };
+
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <main className="mx-auto max-w-[800px] px-6 pt-32 pb-20 text-center">
+          <p className="text-text-muted">불러오는 중...</p>
+        </main>
+      </>
+    );
+  }
 
   if (!project) {
     return (
@@ -32,7 +82,6 @@ export default function ProjectDetailPage({
   }
 
   const stage = STAGE_MAP[project.stage];
-  const comments = DUMMY_COMMENTS.filter((c) => c.project_id === project.id);
   const topLevelComments = comments.filter((c) => !c.parent_id);
   const replies = (parentId: string) => comments.filter((c) => c.parent_id === parentId);
 
@@ -128,8 +177,15 @@ export default function ProjectDetailPage({
               GitHub
             </a>
           )}
-          <button className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-transparent px-5 py-2.5 text-sm font-medium text-text-secondary transition-all hover:border-border-hover hover:text-text-primary">
-            👍 좋아요 {project.upvote_count}
+          <button
+            onClick={handleUpvote}
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-medium transition-all ${
+              upvoted
+                ? "border-accent bg-accent/15 text-accent"
+                : "border-border bg-transparent text-text-secondary hover:border-border-hover hover:text-text-primary"
+            }`}
+          >
+            👍 좋아요 {upvoteCount}
           </button>
         </div>
 
@@ -184,7 +240,7 @@ export default function ProjectDetailPage({
           </h3>
 
           {/* Comment input */}
-          <CommentInput />
+          <CommentInput projectId={id} onCommentAdded={handleCommentAdded} />
 
           {/* Comment list */}
           <div className="mt-8 flex flex-col gap-4">
@@ -253,9 +309,39 @@ export default function ProjectDetailPage({
   );
 }
 
-function CommentInput() {
+function CommentInput({
+  projectId,
+  onCommentAdded,
+}: {
+  projectId: string;
+  onCommentAdded: (comment: Comment) => void;
+}) {
   const [body, setBody] = useState("");
   const [feedbackPoint, setFeedbackPoint] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!body.trim()) return;
+    setSubmitting(true);
+    try {
+      const comment = await createComment({
+        project_id: projectId,
+        body,
+        feedback_point: feedbackPoint || null,
+      });
+      onCommentAdded(comment);
+      setBody("");
+      setFeedbackPoint("");
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("로그인")) {
+        alert("로그인이 필요합니다");
+      } else {
+        alert("댓글 작성에 실패했습니다");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="rounded-2xl border border-border bg-bg-card p-6">
@@ -283,8 +369,12 @@ function CommentInput() {
         className="w-full resize-none rounded-xl border border-border bg-input-bg px-4 py-3 text-sm text-text-primary outline-none transition-all placeholder:text-text-muted focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-glow)]"
       />
       <div className="mt-3 flex justify-end">
-        <button className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_6px_24px_var(--accent-glow)]">
-          피드백 남기기
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !body.trim()}
+          className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_6px_24px_var(--accent-glow)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? "작성 중..." : "피드백 남기기"}
         </button>
       </div>
     </div>

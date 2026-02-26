@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
-import { TECH_STACKS } from "@/lib/dummy-data";
+import { createProject, fetchTechStacks } from "@/lib/supabase/queries";
 import {
   STAGE_MAP,
   FEEDBACK_POINT_MAP,
   type ProjectStage,
+  type TechStack,
 } from "@/types/database";
 
 const TECH_CATEGORIES: Record<string, string> = {
@@ -33,6 +34,13 @@ export default function NewProjectPage() {
   const [selectedTechs, setSelectedTechs] = useState<number[]>([]);
   const [feedbackPoints, setFeedbackPoints] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [techStacks, setTechStacks] = useState<TechStack[]>([]);
+
+  useEffect(() => {
+    fetchTechStacks()
+      .then(setTechStacks)
+      .catch((err) => console.error("fetchTechStacks error:", err?.message ?? err));
+  }, []);
 
   const toggleTech = (id: number) => {
     setSelectedTechs((prev) =>
@@ -50,23 +58,36 @@ export default function NewProjectPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // TODO: Supabase 연동 후 실제 저장
-    await new Promise((r) => setTimeout(r, 1000));
-
-    alert("프로젝트가 등록되었습니다! (Supabase 연동 후 실제 저장됩니다)");
-    setIsSubmitting(false);
-    router.push("/projects");
+    try {
+      await createProject({
+        title,
+        tagline,
+        description,
+        demo_url: demoUrl,
+        app_store_url: appStoreUrl,
+        play_store_url: playStoreUrl,
+        github_url: githubUrl,
+        stage,
+        feedback_points: feedbackPoints,
+        tech_stack_ids: selectedTechs,
+      });
+      router.push("/projects");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "등록에 실패했습니다");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Group tech stacks by category
-  const groupedTechs = TECH_STACKS.reduce(
+  const groupedTechs = techStacks.reduce(
     (acc, tech) => {
       const cat = tech.category;
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(tech);
       return acc;
     },
-    {} as Record<string, typeof TECH_STACKS>
+    {} as Record<string, TechStack[]>
   );
 
   return (

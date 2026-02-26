@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Noto_Sans_KR } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PageTracker } from "@/components/page-tracker";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -31,7 +32,10 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${notoSansKR.variable} font-body antialiased`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <PageTracker />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
