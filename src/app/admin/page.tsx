@@ -9,6 +9,7 @@ import {
   fetchWaitlist,
   fetchRecentPageViews,
 } from "@/lib/supabase/admin-queries";
+import { launchEmailHtml, launchEmailSubject } from "@/lib/email/launch-template";
 
 interface Stats {
   projectCount: number;
@@ -37,7 +38,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [pageViews, setPageViews] = useState<PageView[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "waitlist" | "views">(
+  const [activeTab, setActiveTab] = useState<"overview" | "waitlist" | "views" | "email">(
     "overview"
   );
 
@@ -89,6 +90,7 @@ export default function AdminPage() {
     { key: "overview" as const, label: "개요" },
     { key: "waitlist" as const, label: `대기자 (${stats.waitlistCount})` },
     { key: "views" as const, label: "방문 기록" },
+    { key: "email" as const, label: "이메일 템플릿" },
   ];
 
   return (
@@ -239,6 +241,61 @@ export default function AdminPage() {
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+        {activeTab === "email" && (
+          <div className="flex flex-col gap-6">
+            <div className="rounded-2xl border border-border bg-bg-card p-6">
+              <h3 className="mb-2 font-display text-lg font-semibold">런칭 알림 이메일</h3>
+              <p className="mb-4 text-sm text-text-muted">
+                제목: <strong className="text-text-secondary">{launchEmailSubject}</strong>
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const w = window.open("", "_blank");
+                    if (w) {
+                      w.document.write(launchEmailHtml());
+                      w.document.close();
+                    }
+                  }}
+                  className="cursor-pointer rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-text-secondary transition-all hover:border-border-hover hover:text-text-primary"
+                >
+                  미리보기
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(launchEmailHtml());
+                    alert("HTML이 클립보드에 복사되었습니다");
+                  }}
+                  className="cursor-pointer rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-text-secondary transition-all hover:border-border-hover hover:text-text-primary"
+                >
+                  HTML 복사
+                </button>
+                <button
+                  onClick={() => {
+                    const emails = waitlist.map((w) => w.email).join(", ");
+                    navigator.clipboard.writeText(emails);
+                    alert(`${waitlist.length}개 이메일이 클립보드에 복사되었습니다`);
+                  }}
+                  className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover"
+                >
+                  대기자 이메일 복사 ({waitlist.length}명)
+                </button>
+              </div>
+            </div>
+
+            {/* Email Preview */}
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="border-b border-border bg-bg-card px-6 py-3">
+                <p className="text-xs font-medium text-text-muted">이메일 미리보기</p>
+              </div>
+              <iframe
+                srcDoc={launchEmailHtml()}
+                title="이메일 미리보기"
+                className="h-[600px] w-full bg-white"
+              />
+            </div>
           </div>
         )}
       </main>
