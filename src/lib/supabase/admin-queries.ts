@@ -70,6 +70,36 @@ export async function fetchRecentPageViews() {
   return data ?? [];
 }
 
+// ── Project Approval ──
+
+export async function fetchPendingProjects() {
+  const { data, error } = await supabase()
+    .from("projects")
+    .select(
+      "id, title, tagline, stage, created_at, profiles!projects_user_id_fkey(username, display_name, avatar_url)"
+    )
+    .eq("is_published", false)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function approveProject(id: string) {
+  const { error } = await supabase()
+    .from("projects")
+    .update({ is_published: true })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function rejectProject(id: string) {
+  const { error } = await supabase().from("projects").delete().eq("id", id);
+
+  if (error) throw error;
+}
+
 // ── Track Page View ──
 
 export async function trackPageView(path: string, referrer: string | null) {

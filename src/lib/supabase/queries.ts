@@ -12,6 +12,7 @@ export async function fetchProjects(): Promise<Project[]> {
       "*, profiles!projects_user_id_fkey(id, username, display_name, avatar_url), project_tech_stacks(tech_stacks(id, name, slug, category))"
     )
     .eq("is_published", true)
+    .order("priority", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) throw error;

@@ -8,6 +8,9 @@ import {
   fetchAdminStats,
   fetchWaitlist,
   fetchRecentPageViews,
+  fetchPendingProjects,
+  approveProject,
+  rejectProject,
 } from "@/lib/supabase/admin-queries";
 import { launchEmailHtml, launchEmailSubject } from "@/lib/email/launch-template";
 
@@ -32,13 +35,27 @@ interface PageView {
   created_at: string;
 }
 
+interface PendingProject {
+  id: string;
+  title: string;
+  tagline: string;
+  stage: string;
+  created_at: string;
+  profiles: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  }[];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [pageViews, setPageViews] = useState<PageView[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "waitlist" | "views" | "email">(
+  const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
+  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "waitlist" | "views" | "email">(
     "overview"
   );
 
@@ -53,11 +70,13 @@ export default function AdminPage() {
         fetchAdminStats(),
         fetchWaitlist(),
         fetchRecentPageViews(),
+        fetchPendingProjects(),
       ])
-        .then(([s, w, pv]) => {
+        .then(([s, w, pv, pp]) => {
           setStats(s);
           setWaitlist(w);
           setPageViews(pv);
+          setPendingProjects(pp as PendingProject[]);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -86,8 +105,29 @@ export default function AdminPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
+  const handleApprove = async (id: string) => {
+    if (!confirm("이 프로젝트를 승인하시겠습니까?")) return;
+    try {
+      await approveProject(id);
+      setPendingProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      alert("승인 실패");
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!confirm("이 프로젝트를 거절(삭제)하시겠습니까?")) return;
+    try {
+      await rejectProject(id);
+      setPendingProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      alert("거절 실패");
+    }
+  };
+
   const tabs = [
     { key: "overview" as const, label: "개요" },
+    { key: "projects" as const, label: `프로젝트 (${pendingProjects.length})` },
     { key: "waitlist" as const, label: `대기자 (${stats.waitlistCount})` },
     { key: "views" as const, label: "방문 기록" },
     { key: "email" as const, label: "이메일 템플릿" },
@@ -166,6 +206,70 @@ export default function AdminPage() {
               </div>
             </div>
           </>
+        )}
+
+        {activeTab === "projects" && (
+          <div className="flex flex-col gap-4">
+            {pendingProjects.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-bg-card p-8 text-center text-text-muted">
+                대기 중인 프로젝트가 없습니다
+              </div>
+            ) : (
+              pendingProjects.map((project) => (
+                <div
+                  key={project.id}
+                  className="rounded-2xl border border-border bg-bg-card p-6"
+                >
+                  <div className="mb-3 flex items-start justify-between">
+                    <div>
+                      <h3 className="font-display text-lg font-bold">
+                        {project.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {project.tagline}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-yellow-500/15 px-3 py-1 text-xs font-medium text-yellow-400">
+                      승인 대기
+                    </span>
+                  </div>
+                  <div className="mb-4 flex items-center gap-3 text-xs text-text-muted">
+                    <span>
+                      {project.profiles?.[0]?.display_name || project.profiles?.[0]?.username}
+                    </span>
+                    <span>·</span>
+                    <span>{project.stage}</span>
+                    <span>·</span>
+                    <span>
+                      {new Date(project.created_at).toLocaleDateString("ko-KR")}
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleApprove(project.id)}
+                      className="cursor-pointer rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover"
+                    >
+                      승인
+                    </button>
+                    <button
+                      onClick={() => handleReject(project.id)}
+                      className="cursor-pointer rounded-xl border border-red-500/30 px-5 py-2 text-sm font-medium text-red-400 transition-all hover:bg-red-500/10"
+                    >
+                      거절
+                    </button>
+                    <a
+                      href={`/projects/${project.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl border border-border px-5 py-2 text-sm font-medium text-text-secondary no-underline transition-all hover:border-border-hover hover:text-text-primary"
+                    >
+                      상세보기
+                    </a>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
 
         {activeTab === "waitlist" && (

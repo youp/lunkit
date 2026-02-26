@@ -71,6 +71,7 @@ export default function NewProjectPage() {
         feedback_points: feedbackPoints,
         tech_stack_ids: selectedTechs,
       });
+      alert("프로젝트가 등록되었습니다! 관리자 승인 후 공개됩니다.");
       router.push("/projects");
     } catch (err) {
       alert(err instanceof Error ? err.message : "등록에 실패했습니다");
