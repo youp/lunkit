@@ -305,7 +305,7 @@ export default function AdminPage() {
                   {pendingProjects.map((project) => (
                     <div
                       key={project.id}
-                      className="rounded-2xl border border-yellow-500/20 bg-bg-card p-6"
+                      className="rounded-2xl border bg-bg-card p-6" style={{ borderColor: "rgba(234,179,8,0.2)" }}
                     >
                       <div className="mb-3 flex items-start justify-between">
                         <div>
@@ -316,7 +316,7 @@ export default function AdminPage() {
                             {project.tagline}
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-lg bg-yellow-500/15 px-3 py-1 text-xs font-medium text-yellow-400">
+                        <span className="shrink-0 rounded-lg px-3 py-1 text-xs font-medium text-yellow-400" style={{ backgroundColor: "rgba(234,179,8,0.15)" }}>
                           승인 대기
                         </span>
                       </div>
@@ -340,7 +340,7 @@ export default function AdminPage() {
                         </button>
                         <button
                           onClick={() => handleReject(project.id)}
-                          className="cursor-pointer rounded-xl border border-red-500/30 px-5 py-2 text-sm font-medium text-red-400 transition-all hover:bg-red-500/10"
+                          className="cursor-pointer rounded-xl border px-5 py-2 text-sm font-medium text-red-400 transition-all" style={{ borderColor: "rgba(239,68,68,0.3)" }}
                         >
                           거절
                         </button>
@@ -403,15 +403,15 @@ export default function AdminPage() {
                             {project.profiles?.[0]?.display_name || project.profiles?.[0]?.username}
                           </td>
                           <td className="px-6 py-4">
-                            <span
-                              className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                                project.is_published
-                                  ? "bg-green-500/15 text-green-400"
-                                  : "bg-yellow-500/15 text-yellow-400"
-                              }`}
-                            >
-                              {project.is_published ? "공개" : "대기"}
-                            </span>
+                            {project.is_published ? (
+                              <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-green-400" style={{ backgroundColor: "rgba(34,197,94,0.15)" }}>
+                                공개
+                              </span>
+                            ) : (
+                              <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-yellow-400" style={{ backgroundColor: "rgba(234,179,8,0.15)" }}>
+                                대기
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm text-text-muted">
                             {new Date(project.created_at).toLocaleDateString("ko-KR")}
@@ -419,7 +419,7 @@ export default function AdminPage() {
                           <td className="px-6 py-4">
                             <button
                               onClick={() => handleDelete(project.id, project.title)}
-                              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/10"
+                              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:opacity-80"
                             >
                               삭제
                             </button>
