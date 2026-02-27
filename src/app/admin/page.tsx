@@ -14,6 +14,8 @@ import {
   fetchPendingProjects,
   approveProject,
   rejectProject,
+  logAdminAction,
+  fetchAuditLogs,
 } from "@/lib/supabase/admin-queries";
 import {
   AreaChart,
@@ -81,6 +83,15 @@ interface AdminProject {
   tech_stacks: { name: string }[];
 }
 
+interface AuditLog {
+  id: string;
+  admin_id: string;
+  action: string;
+  target_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -90,7 +101,8 @@ export default function AdminPage() {
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
   const [allProjects, setAllProjects] = useState<AdminProject[]>([]);
   const [dailyViews, setDailyViews] = useState<DailyView[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "waitlist" | "views" | "email">(
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "waitlist" | "views" | "email" | "logs">(
     "overview"
   );
 
@@ -108,14 +120,16 @@ export default function AdminPage() {
         fetchPendingProjects(),
         fetchDailyPageViews(30),
         fetchAllProjects(),
+        fetchAuditLogs(),
       ])
-        .then(([s, w, pv, pp, dv, ap]) => {
+        .then(([s, w, pv, pp, dv, ap, al]) => {
           setStats(s);
           setWaitlist(w);
           setPageViews(pv);
           setPendingProjects(pp as PendingProject[]);
           setDailyViews(dv);
           setAllProjects(ap as AdminProject[]);
+          setAuditLogs(al as AuditLog[]);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -156,6 +170,7 @@ export default function AdminPage() {
     try {
       await approveProject(id);
       setPendingProjects((prev) => prev.filter((p) => p.id !== id));
+      await logAdminAction("approve_project", id, { title: project.title });
 
       if (choice === "1") {
         alert("승인 완료! (이메일 미발송)");
@@ -176,6 +191,12 @@ export default function AdminPage() {
       });
       const result = await res.json();
       if (res.ok) {
+        await logAdminAction("send_email", id, {
+          title: project.title,
+          testOnly: choice === "2",
+          sentCount: result.sentCount,
+          total: result.total,
+        });
         alert(
           choice === "2"
             ? `승인 완료! 테스트 이메일 발송 (${result.sentCount}명)`
@@ -190,9 +211,11 @@ export default function AdminPage() {
   };
 
   const handleReject = async (id: string) => {
+    const project = pendingProjects.find((p) => p.id === id);
     if (!confirm("이 프로젝트를 거절(삭제)하시겠습니까?")) return;
     try {
       await rejectProject(id);
+      await logAdminAction("reject_project", id, { title: project?.title });
       setPendingProjects((prev) => prev.filter((p) => p.id !== id));
     } catch {
       alert("거절 실패");
@@ -203,6 +226,7 @@ export default function AdminPage() {
     if (!confirm(`"${title}" 프로젝트를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
     try {
       await deleteProject(id);
+      await logAdminAction("delete_project", id, { title });
       setAllProjects((prev) => prev.filter((p) => p.id !== id));
       alert("삭제 완료");
     } catch {
@@ -216,6 +240,7 @@ export default function AdminPage() {
     { key: "waitlist" as const, label: `대기자 (${stats.waitlistCount})` },
     { key: "views" as const, label: "방문 기록" },
     { key: "email" as const, label: "이메일 템플릿" },
+    { key: "logs" as const, label: "활동 로그" },
   ];
 
   return (
@@ -637,9 +662,88 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+        {activeTab === "logs" && (
+          <div className="rounded-2xl border border-border bg-bg-card">
+            {auditLogs.length === 0 ? (
+              <p className="p-8 text-center text-text-muted">
+                아직 활동 기록이 없습니다
+              </p>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-[1px] text-text-muted">
+                    <th className="px-6 py-4">행동</th>
+                    <th className="px-6 py-4">상세</th>
+                    <th className="px-6 py-4">시간</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr
+                      key={log.id}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="px-6 py-4">
+                        <AuditActionBadge action={log.action} />
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {formatAuditDetails(log)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-muted">
+                        {new Date(log.created_at).toLocaleString("ko-KR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </main>
     </>
   );
+}
+
+const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  approve_project: { label: "승인", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
+  reject_project: { label: "거절", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
+  delete_project: { label: "삭제", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
+  send_email: { label: "이메일", color: "#6c5ce7", bg: "rgba(108,92,231,0.15)" },
+};
+
+function AuditActionBadge({ action }: { action: string }) {
+  const config = ACTION_CONFIG[action] || { label: action, color: "#a0a0b0", bg: "rgba(160,160,176,0.15)" };
+  return (
+    <span
+      className="rounded-lg px-2.5 py-1 text-xs font-medium"
+      style={{ color: config.color, backgroundColor: config.bg }}
+    >
+      {config.label}
+    </span>
+  );
+}
+
+function formatAuditDetails(log: AuditLog): string {
+  const title = log.details?.title as string | undefined;
+  switch (log.action) {
+    case "approve_project":
+      return title ? `"${title}" 프로젝트 승인` : "프로젝트 승인";
+    case "reject_project":
+      return title ? `"${title}" 프로젝트 거절` : "프로젝트 거절";
+    case "delete_project":
+      return title ? `"${title}" 프로젝트 삭제` : "프로젝트 삭제";
+    case "send_email": {
+      const testOnly = log.details?.testOnly;
+      const sentCount = log.details?.sentCount;
+      const total = log.details?.total;
+      if (testOnly) return title ? `"${title}" 테스트 이메일 발송` : "테스트 이메일 발송";
+      return title
+        ? `"${title}" 이메일 발송 (${sentCount}/${total}명)`
+        : `이메일 발송 (${sentCount}/${total}명)`;
+    }
+    default:
+      return log.target_id || "";
+  }
 }
 
 function StatCard({ label, value }: { label: string; value: number }) {

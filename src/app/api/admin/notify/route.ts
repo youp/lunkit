@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import nodemailer from "nodemailer";
 
 const supabase = createClient(
@@ -16,6 +17,32 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function POST(req: Request) {
+  // ── 관리자 인증 확인 ──
+  const serverSupabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await serverSupabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "인증이 필요합니다." },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile } = await serverSupabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return NextResponse.json(
+      { error: "권한이 없습니다." },
+      { status: 403 }
+    );
+  }
+
   const { projectTitle, projectId, projectTagline, projectStage, techStacks, testOnly } =
     await req.json();
 
@@ -91,13 +118,22 @@ const STAGE_LABELS: Record<string, string> = {
   growing: "성장 중",
 };
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function newProjectEmailHtml({ title, tagline, stage, techStacks, url }: ProjectEmailData) {
-  const stageLabel = STAGE_LABELS[stage] || stage;
+  const stageLabel = STAGE_LABELS[stage] || escapeHtml(stage);
   const techBadges = techStacks
     .slice(0, 5)
     .map(
       (t) =>
-        `<span style="display:inline-block;padding:4px 10px;margin:3px;background-color:#1a1a2e;border-radius:6px;font-size:11px;color:#a0a0b0;">${t}</span>`
+        `<span style="display:inline-block;padding:4px 10px;margin:3px;background-color:#1a1a2e;border-radius:6px;font-size:11px;color:#a0a0b0;">${escapeHtml(t)}</span>`
     )
     .join("");
 
@@ -124,8 +160,8 @@ function newProjectEmailHtml({ title, tagline, stage, techStacks, url }: Project
                 <div style="margin-bottom:12px;">
                   <span style="display:inline-block;padding:4px 10px;background-color:#6c5ce7;border-radius:6px;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.5px;">${stageLabel}</span>
                 </div>
-                <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#ffffff;">${title}</p>
-                ${tagline ? `<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#a0a0b0;">${tagline}</p>` : ""}
+                <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#ffffff;">${escapeHtml(title)}</p>
+                ${tagline ? `<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#a0a0b0;">${escapeHtml(tagline)}</p>` : ""}
                 ${techBadges ? `<div style="margin-top:12px;">${techBadges}</div>` : ""}
               </div>
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#a0a0b0;">

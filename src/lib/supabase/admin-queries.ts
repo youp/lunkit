@@ -162,3 +162,40 @@ export async function trackPageView(path: string, referrer: string | null) {
     referrer: referrer || null,
   });
 }
+
+// ── Audit Logging ──
+
+export type AuditAction =
+  | "approve_project"
+  | "reject_project"
+  | "delete_project"
+  | "send_email";
+
+export async function logAdminAction(
+  action: AuditAction,
+  targetId: string | null,
+  details: Record<string, unknown> = {}
+) {
+  const {
+    data: { user },
+  } = await supabase().auth.getUser();
+  if (!user) return;
+
+  await supabase().from("admin_audit_logs").insert({
+    admin_id: user.id,
+    action,
+    target_id: targetId,
+    details,
+  });
+}
+
+export async function fetchAuditLogs(limit: number = 50) {
+  const { data, error } = await supabase()
+    .from("admin_audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data ?? [];
+}

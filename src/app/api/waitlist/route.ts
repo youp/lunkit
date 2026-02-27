@@ -25,6 +25,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // 이메일 형식 검증
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (typeof email !== "string" || !emailRegex.test(email) || email.length > 254) {
+    return NextResponse.json(
+      { error: "유효한 이메일 주소를 입력해주세요." },
+      { status: 400 }
+    );
+  }
+
   // 1. Supabase에 저장
   const { error } = await supabase
     .from("waitlist")
