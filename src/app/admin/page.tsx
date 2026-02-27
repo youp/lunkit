@@ -8,10 +8,20 @@ import {
   fetchAdminStats,
   fetchWaitlist,
   fetchRecentPageViews,
+  fetchDailyPageViews,
   fetchPendingProjects,
   approveProject,
   rejectProject,
 } from "@/lib/supabase/admin-queries";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { launchEmailHtml, launchEmailSubject } from "@/lib/email/launch-template";
 
 interface Stats {
@@ -35,6 +45,11 @@ interface PageView {
   created_at: string;
 }
 
+interface DailyView {
+  date: string;
+  count: number;
+}
+
 interface PendingProject {
   id: string;
   title: string;
@@ -55,6 +70,7 @@ export default function AdminPage() {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [pageViews, setPageViews] = useState<PageView[]>([]);
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
+  const [dailyViews, setDailyViews] = useState<DailyView[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "projects" | "waitlist" | "views" | "email">(
     "overview"
   );
@@ -71,12 +87,14 @@ export default function AdminPage() {
         fetchWaitlist(),
         fetchRecentPageViews(),
         fetchPendingProjects(),
+        fetchDailyPageViews(30),
       ])
-        .then(([s, w, pv, pp]) => {
+        .then(([s, w, pv, pp, dv]) => {
           setStats(s);
           setWaitlist(w);
           setPageViews(pv);
           setPendingProjects(pp as PendingProject[]);
+          setDailyViews(dv);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -331,40 +349,113 @@ export default function AdminPage() {
         )}
 
         {activeTab === "views" && (
-          <div className="rounded-2xl border border-border bg-bg-card">
-            {pageViews.length === 0 ? (
-              <p className="p-8 text-center text-text-muted">
-                아직 방문 기록이 없습니다
-              </p>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-[1px] text-text-muted">
-                    <th className="px-6 py-4">경로</th>
-                    <th className="px-6 py-4">리퍼러</th>
-                    <th className="px-6 py-4">시간</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageViews.map((pv) => (
-                    <tr
-                      key={pv.id}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-6 py-4 text-sm font-medium text-text-primary">
-                        {pv.path}
-                      </td>
-                      <td className="max-w-[200px] truncate px-6 py-4 text-sm text-text-muted">
-                        {pv.referrer || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-text-muted">
-                        {new Date(pv.created_at).toLocaleString("ko-KR")}
-                      </td>
+          <div className="flex flex-col gap-6">
+            {/* Daily Chart */}
+            <div className="rounded-2xl border border-border bg-bg-card p-6">
+              <h3 className="mb-6 text-sm font-semibold uppercase tracking-[1.5px] text-text-muted">
+                일일 방문 추이 (최근 30일)
+              </h3>
+              {dailyViews.length === 0 ? (
+                <p className="py-8 text-center text-text-muted">아직 데이터 없음</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={dailyViews}>
+                    <defs>
+                      <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6c5ce7" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6c5ce7" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e1e2e" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#666680", fontSize: 11 }}
+                      tickFormatter={(v: string) => {
+                        const d = new Date(v);
+                        return `${d.getMonth() + 1}/${d.getDate()}`;
+                      }}
+                      axisLine={{ stroke: "#1e1e2e" }}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fill: "#666680", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#13131a",
+                        border: "1px solid #1e1e2e",
+                        borderRadius: "12px",
+                        fontSize: "13px",
+                      }}
+                      labelStyle={{ color: "#a0a0b0" }}
+                      itemStyle={{ color: "#6c5ce7" }}
+                      labelFormatter={(v) => {
+                        const d = new Date(String(v));
+                        return d.toLocaleDateString("ko-KR", {
+                          month: "long",
+                          day: "numeric",
+                          weekday: "short",
+                        });
+                      }}
+                      formatter={(value) => [`${value}회`, "방문"]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#6c5ce7"
+                      strokeWidth={2}
+                      fill="url(#colorViews)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Recent Views Table */}
+            <div className="rounded-2xl border border-border bg-bg-card">
+              <div className="border-b border-border px-6 py-4">
+                <h3 className="text-sm font-semibold uppercase tracking-[1.5px] text-text-muted">
+                  최근 방문 기록
+                </h3>
+              </div>
+              {pageViews.length === 0 ? (
+                <p className="p-8 text-center text-text-muted">
+                  아직 방문 기록이 없습니다
+                </p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-[1px] text-text-muted">
+                      <th className="px-6 py-4">경로</th>
+                      <th className="px-6 py-4">리퍼러</th>
+                      <th className="px-6 py-4">시간</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  </thead>
+                  <tbody>
+                    {pageViews.map((pv) => (
+                      <tr
+                        key={pv.id}
+                        className="border-b border-border last:border-0"
+                      >
+                        <td className="px-6 py-4 text-sm font-medium text-text-primary">
+                          {pv.path}
+                        </td>
+                        <td className="max-w-[200px] truncate px-6 py-4 text-sm text-text-muted">
+                          {pv.referrer || "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-text-muted">
+                          {new Date(pv.created_at).toLocaleString("ko-KR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         )}
         {activeTab === "email" && (

@@ -100,6 +100,41 @@ export async function rejectProject(id: string) {
   if (error) throw error;
 }
 
+// ── Daily Page Views (aggregated) ──
+
+export async function fetchDailyPageViews(days: number = 30) {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const { data, error } = await supabase()
+    .from("page_views")
+    .select("created_at")
+    .gte("created_at", since.toISOString())
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  // 날짜별 집계
+  const counts: Record<string, number> = {};
+
+  // 빈 날짜도 0으로 채우기
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - (days - 1 - i));
+    const key = d.toISOString().split("T")[0];
+    counts[key] = 0;
+  }
+
+  (data ?? []).forEach((row) => {
+    const key = new Date(row.created_at).toISOString().split("T")[0];
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
+
+  return Object.entries(counts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }));
+}
+
 // ── Track Page View ──
 
 export async function trackPageView(path: string, referrer: string | null) {
