@@ -76,7 +76,7 @@ export async function fetchPendingProjects() {
   const { data, error } = await supabase()
     .from("projects")
     .select(
-      "id, title, tagline, stage, created_at, profiles!projects_user_id_fkey(username, display_name, avatar_url)"
+      "id, title, tagline, stage, created_at, profiles!projects_user_id_fkey(username, display_name, avatar_url), tech_stacks(name)"
     )
     .eq("is_published", false)
     .order("created_at", { ascending: false });

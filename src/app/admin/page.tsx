@@ -61,6 +61,7 @@ interface PendingProject {
     display_name: string | null;
     avatar_url: string | null;
   }[];
+  tech_stacks: { name: string }[];
 }
 
 export default function AdminPage() {
@@ -140,7 +141,13 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectTitle: project.title, projectId: id }),
+        body: JSON.stringify({
+          projectTitle: project.title,
+          projectId: id,
+          projectTagline: project.tagline,
+          projectStage: project.stage,
+          techStacks: project.tech_stacks?.map((t) => t.name) ?? [],
+        }),
       });
       const result = await res.json();
       if (res.ok) {

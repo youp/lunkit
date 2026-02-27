@@ -16,7 +16,8 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function POST(req: Request) {
-  const { projectTitle, projectId } = await req.json();
+  const { projectTitle, projectId, projectTagline, projectStage, techStacks } =
+    await req.json();
 
   if (!projectTitle || !projectId) {
     return NextResponse.json(
@@ -50,7 +51,13 @@ export async function POST(req: Request) {
         from: `"Lunkit" <${process.env.GMAIL_USER}>`,
         to: email,
         subject: `새 프로젝트가 등록됐어요: ${projectTitle}`,
-        html: newProjectEmailHtml(projectTitle, projectUrl),
+        html: newProjectEmailHtml({
+          title: projectTitle,
+          tagline: projectTagline || "",
+          stage: projectStage || "",
+          techStacks: techStacks || [],
+          url: projectUrl,
+        }),
       });
       sentCount++;
     } catch (err) {
@@ -62,7 +69,31 @@ export async function POST(req: Request) {
   return NextResponse.json({ sentCount, failCount, total: emails.length });
 }
 
-function newProjectEmailHtml(title: string, url: string) {
+interface ProjectEmailData {
+  title: string;
+  tagline: string;
+  stage: string;
+  techStacks: string[];
+  url: string;
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  idea: "아이디어",
+  mvp: "MVP",
+  launched: "런칭",
+  growing: "성장 중",
+};
+
+function newProjectEmailHtml({ title, tagline, stage, techStacks, url }: ProjectEmailData) {
+  const stageLabel = STAGE_LABELS[stage] || stage;
+  const techBadges = techStacks
+    .slice(0, 5)
+    .map(
+      (t) =>
+        `<span style="display:inline-block;padding:4px 10px;margin:3px;background-color:#1a1a2e;border-radius:6px;font-size:11px;color:#a0a0b0;">${t}</span>`
+    )
+    .join("");
+
   return `
 <!DOCTYPE html>
 <html>
@@ -72,17 +103,23 @@ function newProjectEmailHtml(title: string, url: string) {
     <tr>
       <td align="center">
         <table width="520" cellpadding="0" cellspacing="0" style="background-color:#13131a;border:1px solid #1e1e2e;border-radius:16px;overflow:hidden;">
+          <!-- Header -->
           <tr>
             <td style="padding:40px 40px 24px;text-align:center;">
               <div style="display:inline-block;width:48px;height:48px;background-color:#6c5ce7;border-radius:12px;line-height:48px;font-size:24px;">🎉</div>
               <h1 style="margin:16px 0 0;font-size:22px;font-weight:700;color:#ffffff;">새 프로젝트가 등록됐어요!</h1>
             </td>
           </tr>
+          <!-- Project Card -->
           <tr>
             <td style="padding:0 40px 32px;">
-              <div style="background-color:#1a1a2e;border-radius:12px;padding:24px;margin-bottom:20px;text-align:center;">
-                <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#6c5ce7;text-transform:uppercase;letter-spacing:1px;">NEW PROJECT</p>
-                <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">${title}</p>
+              <div style="background-color:#1a1a2e;border:1px solid #2a2a3e;border-radius:14px;padding:28px;margin-bottom:24px;">
+                <div style="margin-bottom:12px;">
+                  <span style="display:inline-block;padding:4px 10px;background-color:#6c5ce7;border-radius:6px;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.5px;">${stageLabel}</span>
+                </div>
+                <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#ffffff;">${title}</p>
+                ${tagline ? `<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#a0a0b0;">${tagline}</p>` : ""}
+                ${techBadges ? `<div style="margin-top:12px;">${techBadges}</div>` : ""}
               </div>
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#a0a0b0;">
                 Lunkit에 새로운 사이드 프로젝트가 등록되었습니다.<br/>
@@ -97,6 +134,7 @@ function newProjectEmailHtml(title: string, url: string) {
               </table>
             </td>
           </tr>
+          <!-- Footer -->
           <tr>
             <td style="padding:24px 40px;border-top:1px solid #1e1e2e;text-align:center;">
               <p style="margin:0;font-size:12px;color:#666680;">
