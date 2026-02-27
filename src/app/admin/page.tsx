@@ -9,6 +9,8 @@ import {
   fetchWaitlist,
   fetchRecentPageViews,
   fetchDailyPageViews,
+  fetchAllProjects,
+  deleteProject,
   fetchPendingProjects,
   approveProject,
   rejectProject,
@@ -64,6 +66,21 @@ interface PendingProject {
   tech_stacks: { name: string }[];
 }
 
+interface AdminProject {
+  id: string;
+  title: string;
+  tagline: string;
+  stage: string;
+  is_published: boolean;
+  created_at: string;
+  profiles: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  }[];
+  tech_stacks: { name: string }[];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -71,6 +88,7 @@ export default function AdminPage() {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [pageViews, setPageViews] = useState<PageView[]>([]);
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
+  const [allProjects, setAllProjects] = useState<AdminProject[]>([]);
   const [dailyViews, setDailyViews] = useState<DailyView[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "projects" | "waitlist" | "views" | "email">(
     "overview"
@@ -89,13 +107,15 @@ export default function AdminPage() {
         fetchRecentPageViews(),
         fetchPendingProjects(),
         fetchDailyPageViews(30),
+        fetchAllProjects(),
       ])
-        .then(([s, w, pv, pp, dv]) => {
+        .then(([s, w, pv, pp, dv, ap]) => {
           setStats(s);
           setWaitlist(w);
           setPageViews(pv);
           setPendingProjects(pp as PendingProject[]);
           setDailyViews(dv);
+          setAllProjects(ap as AdminProject[]);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -179,9 +199,20 @@ export default function AdminPage() {
     }
   };
 
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`"${title}" 프로젝트를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      await deleteProject(id);
+      setAllProjects((prev) => prev.filter((p) => p.id !== id));
+      alert("삭제 완료");
+    } catch {
+      alert("삭제 실패");
+    }
+  };
+
   const tabs = [
     { key: "overview" as const, label: "개요" },
-    { key: "projects" as const, label: `프로젝트 (${pendingProjects.length})` },
+    { key: "projects" as const, label: `프로젝트 (${allProjects.length})` },
     { key: "waitlist" as const, label: `대기자 (${stats.waitlistCount})` },
     { key: "views" as const, label: "방문 기록" },
     { key: "email" as const, label: "이메일 템플릿" },
@@ -263,66 +294,143 @@ export default function AdminPage() {
         )}
 
         {activeTab === "projects" && (
-          <div className="flex flex-col gap-4">
-            {pendingProjects.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-bg-card p-8 text-center text-text-muted">
-                대기 중인 프로젝트가 없습니다
-              </div>
-            ) : (
-              pendingProjects.map((project) => (
-                <div
-                  key={project.id}
-                  className="rounded-2xl border border-border bg-bg-card p-6"
-                >
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <h3 className="font-display text-lg font-bold">
-                        {project.title}
-                      </h3>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        {project.tagline}
-                      </p>
+          <div className="flex flex-col gap-8">
+            {/* 승인 대기 */}
+            {pendingProjects.length > 0 && (
+              <div>
+                <h3 className="mb-4 text-sm font-semibold uppercase tracking-[1.5px] text-yellow-400">
+                  승인 대기 ({pendingProjects.length})
+                </h3>
+                <div className="flex flex-col gap-4">
+                  {pendingProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="rounded-2xl border border-yellow-500/20 bg-bg-card p-6"
+                    >
+                      <div className="mb-3 flex items-start justify-between">
+                        <div>
+                          <h3 className="font-display text-lg font-bold">
+                            {project.title}
+                          </h3>
+                          <p className="mt-1 text-sm text-text-secondary">
+                            {project.tagline}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-lg bg-yellow-500/15 px-3 py-1 text-xs font-medium text-yellow-400">
+                          승인 대기
+                        </span>
+                      </div>
+                      <div className="mb-4 flex items-center gap-3 text-xs text-text-muted">
+                        <span>
+                          {project.profiles?.[0]?.display_name || project.profiles?.[0]?.username}
+                        </span>
+                        <span>·</span>
+                        <span>{project.stage}</span>
+                        <span>·</span>
+                        <span>
+                          {new Date(project.created_at).toLocaleDateString("ko-KR")}
+                        </span>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleApprove(project.id)}
+                          className="cursor-pointer rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover"
+                        >
+                          승인
+                        </button>
+                        <button
+                          onClick={() => handleReject(project.id)}
+                          className="cursor-pointer rounded-xl border border-red-500/30 px-5 py-2 text-sm font-medium text-red-400 transition-all hover:bg-red-500/10"
+                        >
+                          거절
+                        </button>
+                        <a
+                          href={`/projects/${project.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-xl border border-border px-5 py-2 text-sm font-medium text-text-secondary no-underline transition-all hover:border-border-hover hover:text-text-primary"
+                        >
+                          상세보기
+                        </a>
+                      </div>
                     </div>
-                    <span className="shrink-0 rounded-lg bg-yellow-500/15 px-3 py-1 text-xs font-medium text-yellow-400">
-                      승인 대기
-                    </span>
-                  </div>
-                  <div className="mb-4 flex items-center gap-3 text-xs text-text-muted">
-                    <span>
-                      {project.profiles?.[0]?.display_name || project.profiles?.[0]?.username}
-                    </span>
-                    <span>·</span>
-                    <span>{project.stage}</span>
-                    <span>·</span>
-                    <span>
-                      {new Date(project.created_at).toLocaleDateString("ko-KR")}
-                    </span>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleApprove(project.id)}
-                      className="cursor-pointer rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent-hover"
-                    >
-                      승인
-                    </button>
-                    <button
-                      onClick={() => handleReject(project.id)}
-                      className="cursor-pointer rounded-xl border border-red-500/30 px-5 py-2 text-sm font-medium text-red-400 transition-all hover:bg-red-500/10"
-                    >
-                      거절
-                    </button>
-                    <a
-                      href={`/projects/${project.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-xl border border-border px-5 py-2 text-sm font-medium text-text-secondary no-underline transition-all hover:border-border-hover hover:text-text-primary"
-                    >
-                      상세보기
-                    </a>
-                  </div>
+                  ))}
                 </div>
-              ))
+              </div>
             )}
+
+            {/* 전체 프로젝트 */}
+            <div>
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-[1.5px] text-text-muted">
+                전체 프로젝트 ({allProjects.length})
+              </h3>
+              {allProjects.length === 0 ? (
+                <div className="rounded-2xl border border-border bg-bg-card p-8 text-center text-text-muted">
+                  등록된 프로젝트가 없습니다
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border bg-bg-card">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-[1px] text-text-muted">
+                        <th className="px-6 py-4">프로젝트</th>
+                        <th className="px-6 py-4">작성자</th>
+                        <th className="px-6 py-4">상태</th>
+                        <th className="px-6 py-4">등록일</th>
+                        <th className="px-6 py-4"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allProjects.map((project) => (
+                        <tr
+                          key={project.id}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="px-6 py-4">
+                            <a
+                              href={`/projects/${project.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-text-primary no-underline hover:text-accent"
+                            >
+                              {project.title}
+                            </a>
+                            <p className="mt-0.5 text-xs text-text-muted">
+                              {project.tagline}
+                            </p>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-text-muted">
+                            {project.profiles?.[0]?.display_name || project.profiles?.[0]?.username}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                                project.is_published
+                                  ? "bg-green-500/15 text-green-400"
+                                  : "bg-yellow-500/15 text-yellow-400"
+                              }`}
+                            >
+                              {project.is_published ? "공개" : "대기"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-text-muted">
+                            {new Date(project.created_at).toLocaleDateString("ko-KR")}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleDelete(project.id, project.title)}
+                              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/10"
+                            >
+                              삭제
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

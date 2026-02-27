@@ -70,6 +70,25 @@ export async function fetchRecentPageViews() {
   return data ?? [];
 }
 
+// ── Project Management ──
+
+export async function fetchAllProjects() {
+  const { data, error } = await supabase()
+    .from("projects")
+    .select(
+      "id, title, tagline, stage, is_published, created_at, profiles!projects_user_id_fkey(username, display_name, avatar_url), tech_stacks(name)"
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function deleteProject(id: string) {
+  const { error } = await supabase().from("projects").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ── Project Approval ──
 
 export async function fetchPendingProjects() {
