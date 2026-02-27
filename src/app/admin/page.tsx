@@ -128,16 +128,20 @@ export default function AdminPage() {
     const project = pendingProjects.find((p) => p.id === id);
     if (!project) return;
 
-    const sendEmail = confirm(
-      "이 프로젝트를 승인하시겠습니까?\n\n[확인] 승인 + 대기자 이메일 발송\n[취소] 취소"
+    const choice = prompt(
+      "이 프로젝트를 승인하시겠습니까?\n\n1 = 승인만 (이메일 없음)\n2 = 승인 + 테스트 이메일 (나에게만)\n3 = 승인 + 전체 발송\n\n번호를 입력하세요:"
     );
-    if (!sendEmail) return;
+    if (!choice || !["1", "2", "3"].includes(choice)) return;
 
     try {
       await approveProject(id);
       setPendingProjects((prev) => prev.filter((p) => p.id !== id));
 
-      // 대기자에게 알림 이메일 발송
+      if (choice === "1") {
+        alert("승인 완료! (이메일 미발송)");
+        return;
+      }
+
       const res = await fetch("/api/admin/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,11 +151,16 @@ export default function AdminPage() {
           projectTagline: project.tagline,
           projectStage: project.stage,
           techStacks: project.tech_stacks?.map((t) => t.name) ?? [],
+          testOnly: choice === "2",
         }),
       });
       const result = await res.json();
       if (res.ok) {
-        alert(`승인 완료! 이메일 ${result.sentCount}/${result.total}명 발송 성공`);
+        alert(
+          choice === "2"
+            ? `승인 완료! 테스트 이메일 발송 (${result.sentCount}명)`
+            : `승인 완료! 이메일 ${result.sentCount}/${result.total}명 발송 성공`
+        );
       } else {
         alert(`승인 완료! (이메일 발송 실패: ${result.error})`);
       }

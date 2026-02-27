@@ -16,7 +16,7 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function POST(req: Request) {
-  const { projectTitle, projectId, projectTagline, projectStage, techStacks } =
+  const { projectTitle, projectId, projectTagline, projectStage, techStacks, testOnly } =
     await req.json();
 
   if (!projectTitle || !projectId) {
@@ -26,19 +26,26 @@ export async function POST(req: Request) {
     );
   }
 
-  // 대기자 이메일 목록 조회
-  const { data: waitlist, error } = await supabase
-    .from("waitlist")
-    .select("email");
+  // 테스트 모드: 관리자에게만 발송
+  const ADMIN_EMAIL = process.env.GMAIL_USER!;
 
-  if (error || !waitlist?.length) {
-    return NextResponse.json(
-      { error: "대기자 목록을 가져올 수 없습니다." },
-      { status: 500 }
-    );
+  let emails: string[];
+
+  if (testOnly) {
+    emails = [ADMIN_EMAIL];
+  } else {
+    const { data: waitlist, error } = await supabase
+      .from("waitlist")
+      .select("email");
+
+    if (error || !waitlist?.length) {
+      return NextResponse.json(
+        { error: "대기자 목록을 가져올 수 없습니다." },
+        { status: 500 }
+      );
+    }
+    emails = waitlist.map((w) => w.email);
   }
-
-  const emails = waitlist.map((w) => w.email);
   const projectUrl = `https://lunkit.kr/projects/${projectId}`;
 
   let sentCount = 0;
